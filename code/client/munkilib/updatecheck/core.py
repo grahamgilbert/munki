@@ -144,6 +144,11 @@ def check(client_id='', localmanifestpath=None):
         display.display_detail('**Checking for managed updates**')
         analyze.process_manifest_for_key(
             mainmanifestpath, 'managed_updates', installinfo)
+
+        if localmanifestpath:
+            analyze.process_manifest_for_key(
+                localmanifestpath, 'managed_updates', installinfo
+            )
         if processes.stop_requested():
             return 0
 
