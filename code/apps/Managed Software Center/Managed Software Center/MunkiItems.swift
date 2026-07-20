@@ -169,6 +169,10 @@ class GenericItem: BaseItem {
             my["size_sort"] = 0
             my["size"] = "-"
         }
+        // Low-data "Download anyway" button defaults; populated for
+        // low_data_deferred UpdateItems (see UpdateItem.init).
+        my["hide_low_data_button"] = "hidden"
+        my["low_data_action_text"] = ""
     }
 
     func description() -> String {
@@ -994,6 +998,14 @@ class UpdateItem: GenericItem {
             my["note"] = NSLocalizedString(
                 "Download paused — low data connection",
                 comment: "Low data connection deferred download note")
+            // Offer a "Download anyway" button unless the admin disabled
+            // user overrides via AllowLowDataOverride.
+            if munkiPref("AllowLowDataOverride") as? Bool ?? true {
+                my["hide_low_data_button"] = ""
+                my["low_data_action_text"] = NSLocalizedString(
+                    "Download anyway",
+                    comment: "Download anyway button title")
+            }
         }
     }
     
