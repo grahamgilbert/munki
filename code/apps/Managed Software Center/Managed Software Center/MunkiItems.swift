@@ -311,6 +311,11 @@ class GenericItem: BaseItem {
     
     func status_text() -> String {
         // Return localized status display text
+        if my["low_data_deferred"] as? Bool ?? false {
+            return NSLocalizedString(
+                "Download paused — low data connection",
+                comment: "Low data connection deferred download note")
+        }
         let status = my["status"] as? String ?? ""
         if status == "unavailable" {
             return unavailable_reason_text()
