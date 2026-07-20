@@ -325,12 +325,17 @@ func processInstall(
                 onLowDataConnection: onLowDataConnection(),
                 maxSizeOverLowDataConnection: pref("MaxSizeOverLowDataConnection") as? Int ?? 0
             ) {
-                display.detail("Deferring download of \(manifestItemName) because this Mac is on a low data connection.")
-                processedItem["installed"] = false
-                processedItem["low_data_deferred"] = true
-                processedItem["note"] = "Download of \(displayName) was paused because this Mac is on a low data connection."
-                appendToProcessedManagedInstalls(processedItem)
-                return false
+                let allowOverride = pref("AllowLowDataOverride") as? Bool ?? true
+                if allowOverride, lowDataOverrideItems().contains(name) {
+                    display.detail("Downloading \(manifestItemName) anyway on a low data connection due to a user override.")
+                } else {
+                    display.detail("Deferring download of \(manifestItemName) because this Mac is on a low data connection.")
+                    processedItem["installed"] = false
+                    processedItem["low_data_deferred"] = true
+                    processedItem["note"] = "Download of \(displayName) was paused because this Mac is on a low data connection."
+                    appendToProcessedManagedInstalls(processedItem)
+                    return false
+                }
             }
             do {
                 // record starttime

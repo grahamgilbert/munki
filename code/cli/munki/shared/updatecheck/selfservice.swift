@@ -60,6 +60,66 @@ func updateSelfServeManifest() {
     }
 }
 
+/// Returns the path to the root-owned low-data overrides plist. This records the
+/// items the user has chosen to "Download anyway" while on a low-data
+/// connection. Format: a dict with an "items" key holding an array of item
+/// names, e.g. { "items": ["GoogleChrome"] }.
+func lowDataOverridesPath() -> String {
+    return managedInstallsDir(subpath: "LowDataOverrides.plist")
+}
+
+/// Updates the low-data overrides from a user-writable copy if it exists.
+/// Managed Software Center (running as the user) writes the user's "Download
+/// anyway" choices to /Users/Shared/.low_data_overrides.plist; this copies that
+/// staging file into the root-owned location and removes it. Modelled on
+/// updateSelfServeManifest(), including the symlink guard.
+func updateLowDataOverrides() {
+    let userOverrides = "/Users/Shared/.low_data_overrides.plist"
+    let systemOverrides = lowDataOverridesPath()
+    if pathIsSymlink(userOverrides) {
+        // not allowed as it could link to things not normally
+        // readable by unprivileged users
+        try? FileManager.default.removeItem(atPath: userOverrides)
+        display.warning("Found symlink at \(userOverrides). Ignoring and removing.")
+    }
+    if !pathExists(userOverrides) {
+        // nothing to do!
+        return
+    }
+    // read the user-generated file to ensure it's valid, then write it
+    // to the system location
+    do {
+        if let plist = try readPlist(fromFile: userOverrides) {
+            try writePlist(plist, toFile: systemOverrides)
+            try? FileManager.default.removeItem(atPath: userOverrides)
+        } else {
+            display.error("Could not read \(userOverrides): data was nil")
+            try? FileManager.default.removeItem(atPath: userOverrides)
+        }
+    } catch let PlistError.readError(description) {
+        display.error("Could not read \(userOverrides): \(description)")
+        try? FileManager.default.removeItem(atPath: userOverrides)
+    } catch let PlistError.writeError(description) {
+        display.error("Could not write \(systemOverrides): \(description)")
+    } catch {
+        display.error("Unexpected error reading or writing low-data overrides: \(error.localizedDescription)")
+    }
+}
+
+/// Returns the list of item names the user has chosen to download anyway on a
+/// low-data connection.
+func lowDataOverrideItems() -> [String] {
+    let systemOverrides = lowDataOverridesPath()
+    guard pathExists(systemOverrides),
+          let raw = try? readPlist(fromFile: systemOverrides),
+          let plist = raw as? PlistDict,
+          let items = plist["items"] as? [String]
+    else {
+        return []
+    }
+    return items
+}
+
 /// Process a default installs item. Potentially add it to managed_installs
 /// in the SelfServeManifest
 func processDefaultInstalls(_ defaultItems: [String]) {
