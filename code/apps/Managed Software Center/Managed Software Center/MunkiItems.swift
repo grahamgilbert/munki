@@ -988,6 +988,13 @@ class UpdateItem: GenericItem {
         my["hide_cancel_button"]  = "hidden"
         my["dependent_items"] = dependentItems(name)
         my["days_available"] = getDaysPending(name)
+        if my["low_data_deferred"] as? Bool ?? false {
+            // Show a localized "paused" message instead of the plain-English
+            // note recorded by managedsoftwareupdate on the CLI side.
+            my["note"] = NSLocalizedString(
+                "Download paused — low data connection",
+                comment: "Low data connection deferred download note")
+        }
     }
     
     override func description() -> String {
