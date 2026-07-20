@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09F71AB7CE8B63172BD55302 /* networkconditions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033045629272F3646E39608C /* networkconditions.swift */; };
 		8972AAAED592738E565ED67B /* networkconditions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033045629272F3646E39608C /* networkconditions.swift */; };
 		C0011CAC2C7A64F30004ED70 /* Predicates.m in Sources */ = {isa = PBXBuildFile; fileRef = C0011CAB2C7A64F30004ED70 /* Predicates.m */; };
 		C0011CAD2C7A64F30004ED70 /* Predicates.m in Sources */ = {isa = PBXBuildFile; fileRef = C0011CAB2C7A64F30004ED70 /* Predicates.m */; };
@@ -2170,6 +2171,7 @@
 				C0684DDE2DBFDD190091E774 /* constants.swift in Sources */,
 				C058EF302DCD18D3002775E0 /* tempfileutils.swift in Sources */,
 				C058EF7E2DCF9FB0002775E0 /* MiddlewareProtocol.swift in Sources */,
+				09F71AB7CE8B63172BD55302 /* networkconditions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

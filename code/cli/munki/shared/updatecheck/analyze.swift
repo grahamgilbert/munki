@@ -124,6 +124,16 @@ func alreadyProcessed(_ itemName: String, installInfo: PlistDict, sections: [Str
     return false
 }
 
+/// True if the item's force_install_after_date has been reached (in local time,
+/// matching the forced-install logic in installinfo.swift). Such an item is due
+/// to be force-installed, so it must download regardless of connection.
+func forceInstallDeadlinePassed(_ pkginfo: PlistDict) -> Bool {
+    guard let forceDate = pkginfo["force_install_after_date"] as? Date else {
+        return false
+    }
+    return Date() >= subtractTZOffsetFromDate(forceDate)
+}
+
 /// Returns true if downloading this item should be deferred because we are on
 /// a low data connection (see isOnLowDataConnection()). The connection state
 /// and the MaxSizeOverLowDataConnection threshold are passed in so this stays a
@@ -143,9 +153,7 @@ func shouldDeferDownloadForLowData(
     if !onLowDataConnection {
         return false
     }
-    if let forceDate = pkginfo["force_install_after_date"] as? Date,
-       Date() >= subtractTZOffsetFromDate(forceDate)
-    {
+    if forceInstallDeadlinePassed(pkginfo) {
         // deadline reached; item will be force-installed, so it must download
         return false
     }
@@ -175,7 +183,8 @@ func processInstall(
     catalogList: [String],
     installInfo: inout PlistDict,
     isManagedUpdate: Bool = false,
-    isOptionalInstall: Bool = false
+    isOptionalInstall: Bool = false,
+    lowDataExempt: Bool = false
 ) async -> Bool {
     /// helper function
     func appendToProcessedManagedInstalls(_ item: PlistDict) {
@@ -269,6 +278,9 @@ func processInstall(
     } else if let requires = pkginfo["requires"] as? String {
         dependencies = [requires]
     }
+    // A forced item past its deadline (or a dependency of one) must download
+    // even on low data, so propagate that exemption to its required items.
+    let lowDataExemptForDependencies = lowDataExempt || forceInstallDeadlinePassed(pkginfo)
     for item in dependencies {
         display.detail("\(name)-\(version) requires \(item). Getting info on \(item)...")
         let success = await processInstall(
@@ -276,7 +288,8 @@ func processInstall(
             catalogList: catalogList,
             installInfo: &installInfo,
             isManagedUpdate: isManagedUpdate,
-            isOptionalInstall: isOptionalInstall
+            isOptionalInstall: isOptionalInstall,
+            lowDataExempt: lowDataExemptForDependencies
         )
         if !success {
             dependenciesMet = false
@@ -319,12 +332,20 @@ func processInstall(
             // "install" that has no actual download
             filename = "packageless_install"
         } else {
-            if shouldDeferDownloadForLowData(
-                pkginfo,
-                installerItemSize: installerItemSize,
-                onLowDataConnection: onLowDataConnection(),
-                maxSizeOverLowDataConnection: pref("MaxSizeOverLowDataConnection") as? Int ?? 0
-            ) {
+            // Skip deferral if the item is exempt (forced/dependency of forced)
+            // or already fully cached (installing it transfers no data).
+            let installerLocation = pkginfo["installer_item_location"] as? String ?? ""
+            // ponytail: presence check, not a hash check; a partial cache would
+            // still resume on low data. Full-cache is the case that matters here.
+            let alreadyCached = !installerLocation.isEmpty && pathExists(getDownloadCachePath(installerLocation))
+            if !lowDataExempt, !alreadyCached,
+               shouldDeferDownloadForLowData(
+                   pkginfo,
+                   installerItemSize: installerItemSize,
+                   onLowDataConnection: onLowDataConnection(),
+                   maxSizeOverLowDataConnection: pref("MaxSizeOverLowDataConnection") as? Int ?? 0
+               )
+            {
                 let allowOverride = pref("AllowLowDataOverride") as? Bool ?? true
                 if allowOverride, lowDataOverrideItems().contains(name) {
                     display.detail("Downloading \(manifestItemName) anyway on a low data connection due to a user override.")
@@ -336,6 +357,12 @@ func processInstall(
                     appendToProcessedManagedInstalls(processedItem)
                     return false
                 }
+            }
+            // We're downloading this item, so a one-time low-data override (if
+            // any) has served its purpose; consume it now so it can't later
+            // authorize a newer version over low data.
+            if lowDataOverrideItems().contains(name) {
+                removeLowDataOverrides(names: [name])
             }
             do {
                 // record starttime

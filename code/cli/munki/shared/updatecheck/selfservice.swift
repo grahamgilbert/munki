@@ -110,11 +110,10 @@ func lowDataOverrideItems() -> [String] {
     return items
 }
 
-/// Removes now-installed items from the low-data overrides so a stale override
-/// can't suppress deferral of a future update to the same item. The override is
-/// meant to be a one-time "download this anyway"; once the item is installed
-/// it has served its purpose.
-func pruneLowDataOverrides(installedItemNames: [String]) {
+/// Removes the given item names from the low-data overrides. Used to consume a
+/// one-time "download anyway" override when the item is being downloaded, so a
+/// stale override can't later authorize a newer version over low data.
+func removeLowDataOverrides(names: [String]) {
     let systemOverrides = lowDataOverridesPath()
     guard pathExists(systemOverrides),
           let raw = try? readPlist(fromFile: systemOverrides),
@@ -123,7 +122,7 @@ func pruneLowDataOverrides(installedItemNames: [String]) {
     else {
         return
     }
-    let remaining = items.filter { !installedItemNames.contains($0) }
+    let remaining = items.filter { !names.contains($0) }
     if remaining.count == items.count {
         // nothing to prune
         return
