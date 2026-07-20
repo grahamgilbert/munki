@@ -120,6 +120,36 @@ func lowDataOverrideItems() -> [String] {
     return items
 }
 
+/// Removes now-installed items from the low-data overrides so a stale override
+/// can't suppress deferral of a future update to the same item. The override is
+/// meant to be a one-time "download this anyway"; once the item is installed
+/// it has served its purpose.
+func pruneLowDataOverrides(installedItemNames: [String]) {
+    let systemOverrides = lowDataOverridesPath()
+    guard pathExists(systemOverrides),
+          let raw = try? readPlist(fromFile: systemOverrides),
+          var plist = raw as? PlistDict,
+          let items = plist["items"] as? [String]
+    else {
+        return
+    }
+    let remaining = items.filter { !installedItemNames.contains($0) }
+    if remaining.count == items.count {
+        // nothing to prune
+        return
+    }
+    if remaining.isEmpty {
+        try? FileManager.default.removeItem(atPath: systemOverrides)
+        return
+    }
+    plist["items"] = remaining
+    do {
+        try writePlist(plist, toFile: systemOverrides)
+    } catch {
+        display.error("Could not write \(systemOverrides): \(error.localizedDescription)")
+    }
+}
+
 /// Process a default installs item. Potentially add it to managed_installs
 /// in the SelfServeManifest
 func processDefaultInstalls(_ defaultItems: [String]) {

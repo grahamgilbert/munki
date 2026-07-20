@@ -447,6 +447,9 @@ func checkForUpdates(clientID: String? = nil, localManifestPath: String? = nil) 
         // clean up any old managed_uninstalls in the SelfServeManifest
         cleanUpSelfServeManagedUninstalls(removals)
 
+        // remove low-data download overrides for items that are now installed
+        pruneLowDataOverrides(installedItemNames: installedItems)
+
         // sort startosinstall items to the end of managed_installs
         let nonStartOSInstallItems = managedInstalls.filter {
             ($0["install_type"] as? String ?? "") != "startosinstall"
