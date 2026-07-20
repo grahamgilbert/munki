@@ -124,6 +124,45 @@ func alreadyProcessed(_ itemName: String, installInfo: PlistDict, sections: [Str
     return false
 }
 
+/// Returns true if downloading this item should be deferred because we are on
+/// a low data connection (see isOnLowDataConnection()). The connection state
+/// and the MaxSizeOverLowDataConnection threshold are passed in so this stays a
+/// pure function that is easy to test.
+///
+/// A reached force_install_after_date always wins: an item that is due to be
+/// force-installed must download regardless of connection. The per-item
+/// download_on_low_data key ("always"/"never") overrides the size threshold;
+/// "auto" (or an absent/unrecognized value) follows the threshold, which is
+/// itself disabled when MaxSizeOverLowDataConnection is 0.
+func shouldDeferDownloadForLowData(
+    _ pkginfo: PlistDict,
+    installerItemSize: Int,
+    onLowDataConnection: Bool,
+    maxSizeOverLowDataConnection: Int
+) -> Bool {
+    if !onLowDataConnection {
+        return false
+    }
+    if let forceDate = pkginfo["force_install_after_date"] as? Date,
+       Date() >= subtractTZOffsetFromDate(forceDate)
+    {
+        // deadline reached; item will be force-installed, so it must download
+        return false
+    }
+    switch pkginfo["download_on_low_data"] as? String {
+    case "always":
+        return false
+    case "never":
+        return true
+    default:
+        // "auto", absent, or an unrecognized value: follow the size threshold
+        if maxSizeOverLowDataConnection <= 0 {
+            return false
+        }
+        return installerItemSize > maxSizeOverLowDataConnection
+    }
+}
+
 /// Processes a manifest item for install. Determines if it needs to be
 /// installed, and if so, if any items it is dependent on need to
 /// be installed first.  Installation detail is added to
@@ -280,6 +319,19 @@ func processInstall(
             // "install" that has no actual download
             filename = "packageless_install"
         } else {
+            if shouldDeferDownloadForLowData(
+                pkginfo,
+                installerItemSize: installerItemSize,
+                onLowDataConnection: onLowDataConnection(),
+                maxSizeOverLowDataConnection: pref("MaxSizeOverLowDataConnection") as? Int ?? 0
+            ) {
+                display.detail("Deferring download of \(manifestItemName) because this Mac is on a low data connection.")
+                processedItem["installed"] = false
+                processedItem["low_data_deferred"] = true
+                processedItem["note"] = "Download of \(displayName) was paused because this Mac is on a low data connection."
+                appendToProcessedManagedInstalls(processedItem)
+                return false
+            }
             do {
                 // record starttime
                 let startTime = Date()

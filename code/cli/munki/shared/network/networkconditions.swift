@@ -53,3 +53,18 @@ func isOnLowDataConnection() -> Bool {
     }
     return isLowData
 }
+
+private var cachedLowDataConnection: Bool? = nil
+
+/// Cached, once-per-run answer to isOnLowDataConnection(). managedsoftwareupdate
+/// runs as a one-shot process, so sampling a single time keeps every per-item
+/// download decision in a run consistent and avoids starting an NWPathMonitor
+/// for every item we evaluate.
+func onLowDataConnection() -> Bool {
+    if let cached = cachedLowDataConnection {
+        return cached
+    }
+    let sampled = isOnLowDataConnection()
+    cachedLowDataConnection = sampled
+    return sampled
+}
