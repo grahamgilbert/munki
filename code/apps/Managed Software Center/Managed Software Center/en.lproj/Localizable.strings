@@ -142,6 +142,15 @@
 /* managedsoftwareupdate message */
 "Done." = "Done.";
 
+/* Download anyway button title */
+"Download anyway" = "Download anyway";
+
+/* Low data connection deferred download note */
+"Download paused — low data connection" = "Download paused — low data connection";
+
+/* Download Anyway alert title */
+"Download this item anyway?" = "Download this item anyway?";
+
 /* Downloading status text */
 "Downloading" = "Downloading";
 
@@ -471,6 +480,9 @@
 
 /* Forced Date warning */
 "This item must be installed by %@" = "This item must be installed by %@";
+
+/* Download Anyway alert detail */
+"This item will be downloaded over a low data connection, which may use cellular data. It will download the next time Managed Software Center checks for updates." = "This item will be downloaded over a low data connection, which may use cellular data. It will download the next time Managed Software Center checks for updates.";
 
 /* Pending days message */
 "This update has been pending for %@ days." = "This update has been pending for %@ days.";
