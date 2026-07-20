@@ -26,38 +26,48 @@ func selfServiceManifestPath() -> String {
     return managedInstallsDir(subpath: "manifests/SelfServeManifest")
 }
 
-/// Updates the SelfServeManifest from a user-writable copy if it exists.
-func updateSelfServeManifest() {
-    let userManifest = "/Users/Shared/.SelfServeManifest"
-    let systemManifest = selfServiceManifestPath()
-    if pathIsSymlink(userManifest) {
+/// Promotes a user-writable plist from /Users/Shared into a root-owned location:
+/// validates it by reading, writes it to the system path, then removes the
+/// staging file. Includes a symlink guard, since the staging file is
+/// user-writable and a symlink there could point at things unprivileged users
+/// should not be able to read.
+func promoteUserWritablePlist(from userPath: String, to systemPath: String, label: String) {
+    if pathIsSymlink(userPath) {
         // not allowed as it could link to things not normally
         // readable by unprivileged users
-        try? FileManager.default.removeItem(atPath: userManifest)
-        display.warning("Found symlink at \(userManifest). Ignoring and removing.")
+        try? FileManager.default.removeItem(atPath: userPath)
+        display.warning("Found symlink at \(userPath). Ignoring and removing.")
     }
-    if !pathExists(userManifest) {
+    if !pathExists(userPath) {
         // nothing to do!
         return
     }
-    // read the user-generated manifest to ensure it's valid, then write it
-    // to the system manifest location
+    // read the user-generated file to ensure it's valid, then write it
+    // to the system location
     do {
-        if let plist = try readPlist(fromFile: userManifest) {
-            try writePlist(plist, toFile: systemManifest)
-            try? FileManager.default.removeItem(atPath: userManifest)
+        if let plist = try readPlist(fromFile: userPath) {
+            try writePlist(plist, toFile: systemPath)
+            try? FileManager.default.removeItem(atPath: userPath)
         } else {
-            display.error("Could not read \(userManifest): data was nil")
-            try? FileManager.default.removeItem(atPath: userManifest)
+            display.error("Could not read \(userPath): data was nil")
+            try? FileManager.default.removeItem(atPath: userPath)
         }
     } catch let PlistError.readError(description) {
-        display.error("Could not read \(userManifest): \(description)")
-        try? FileManager.default.removeItem(atPath: userManifest)
+        display.error("Could not read \(userPath): \(description)")
+        try? FileManager.default.removeItem(atPath: userPath)
     } catch let PlistError.writeError(description) {
-        display.error("Could not write \(systemManifest): \(description)")
+        display.error("Could not write \(systemPath): \(description)")
     } catch {
-        display.error("Unexpected error reading or writing SelfServeManifest: \(error.localizedDescription)")
+        display.error("Unexpected error reading or writing \(label): \(error.localizedDescription)")
     }
+}
+
+/// Updates the SelfServeManifest from a user-writable copy if it exists.
+func updateSelfServeManifest() {
+    promoteUserWritablePlist(
+        from: "/Users/Shared/.SelfServeManifest",
+        to: selfServiceManifestPath(),
+        label: "SelfServeManifest")
 }
 
 /// Returns the path to the root-owned low-data overrides plist. This records the
@@ -70,53 +80,33 @@ func lowDataOverridesPath() -> String {
 
 /// Updates the low-data overrides from a user-writable copy if it exists.
 /// Managed Software Center (running as the user) writes the user's "Download
-/// anyway" choices to /Users/Shared/.low_data_overrides.plist; this copies that
-/// staging file into the root-owned location and removes it. Modelled on
-/// updateSelfServeManifest(), including the symlink guard.
+/// anyway" choices to /Users/Shared/.low_data_overrides.plist; this promotes
+/// that staging file into the root-owned location and removes it.
 func updateLowDataOverrides() {
-    let userOverrides = "/Users/Shared/.low_data_overrides.plist"
-    let systemOverrides = lowDataOverridesPath()
-    if pathIsSymlink(userOverrides) {
-        // not allowed as it could link to things not normally
-        // readable by unprivileged users
-        try? FileManager.default.removeItem(atPath: userOverrides)
-        display.warning("Found symlink at \(userOverrides). Ignoring and removing.")
-    }
-    if !pathExists(userOverrides) {
-        // nothing to do!
-        return
-    }
-    // read the user-generated file to ensure it's valid, then write it
-    // to the system location
-    do {
-        if let plist = try readPlist(fromFile: userOverrides) {
-            try writePlist(plist, toFile: systemOverrides)
-            try? FileManager.default.removeItem(atPath: userOverrides)
-        } else {
-            display.error("Could not read \(userOverrides): data was nil")
-            try? FileManager.default.removeItem(atPath: userOverrides)
-        }
-    } catch let PlistError.readError(description) {
-        display.error("Could not read \(userOverrides): \(description)")
-        try? FileManager.default.removeItem(atPath: userOverrides)
-    } catch let PlistError.writeError(description) {
-        display.error("Could not write \(systemOverrides): \(description)")
-    } catch {
-        display.error("Unexpected error reading or writing low-data overrides: \(error.localizedDescription)")
-    }
+    promoteUserWritablePlist(
+        from: "/Users/Shared/.low_data_overrides.plist",
+        to: lowDataOverridesPath(),
+        label: "low-data overrides")
 }
 
+private var cachedLowDataOverrideItems: [String]?
+
 /// Returns the list of item names the user has chosen to download anyway on a
-/// low-data connection.
+/// low-data connection. Cached once per run: the overrides file is staged at the
+/// start of the check and does not change while items are processed, so we don't
+/// re-read it for every deferred item.
 func lowDataOverrideItems() -> [String] {
-    let systemOverrides = lowDataOverridesPath()
-    guard pathExists(systemOverrides),
-          let raw = try? readPlist(fromFile: systemOverrides),
-          let plist = raw as? PlistDict,
-          let items = plist["items"] as? [String]
-    else {
-        return []
+    if let cached = cachedLowDataOverrideItems {
+        return cached
     }
+    var items = [String]()
+    if let raw = try? readPlist(fromFile: lowDataOverridesPath()),
+       let plist = raw as? PlistDict,
+       let list = plist["items"] as? [String]
+    {
+        items = list
+    }
+    cachedLowDataOverrideItems = items
     return items
 }
 

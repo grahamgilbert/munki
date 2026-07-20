@@ -53,6 +53,14 @@ func clearMunkiItemsCache() {
     Cache.shared.clear()
 }
 
+/// Localized text shown for an item whose download is paused on a low-data
+/// connection.
+func lowDataPausedNote() -> String {
+    return NSLocalizedString(
+        "Download paused — low data connection",
+        comment: "Low data connection deferred download note")
+}
+
 class BaseItem {
     // Base class for our types of Munki items
     var my = [String: Any]()
@@ -312,9 +320,7 @@ class GenericItem: BaseItem {
     func status_text() -> String {
         // Return localized status display text
         if my["low_data_deferred"] as? Bool ?? false {
-            return NSLocalizedString(
-                "Download paused — low data connection",
-                comment: "Low data connection deferred download note")
+            return lowDataPausedNote()
         }
         let status = my["status"] as? String ?? ""
         if status == "unavailable" {
@@ -1000,9 +1006,7 @@ class UpdateItem: GenericItem {
         if my["low_data_deferred"] as? Bool ?? false {
             // Show a localized "paused" message instead of the plain-English
             // note recorded by managedsoftwareupdate on the CLI side.
-            my["note"] = NSLocalizedString(
-                "Download paused — low data connection",
-                comment: "Low data connection deferred download note")
+            my["note"] = lowDataPausedNote()
             // Offer a "Download anyway" button unless the admin disabled
             // user overrides via AllowLowDataOverride.
             if munkiPref("AllowLowDataOverride") as? Bool ?? true {
